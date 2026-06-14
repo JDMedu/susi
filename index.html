@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>수시 지원 가능 대학 예측기</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#16213a; --ink-soft:#43506b; --line:#e3e8f0; --line-soft:#eef1f6;
+    --bg:#f4f6fa; --card:#ffffff; --accent:#3b5bdb; --accent-soft:#eaeefb;
+    --reach:#e8590c; --reach-bg:#fdf0e7; --fit:#3b5bdb; --fit-bg:#eaeefb;
+    --safe:#2b8a6e; --safe-bg:#e6f3ee; --muted:#8a93a6;
+    --shadow:0 1px 2px rgba(22,33,58,.04),0 6px 24px rgba(22,33,58,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Pretendard","Pretendard Variable",system-ui,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.5;
+    -webkit-font-smoothing:antialiased;font-feature-settings:"tnum";}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 18px 80px}
+
+  header.top{padding:30px 0 22px}
+  .brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .brand h1{font-size:23px;font-weight:800;letter-spacing:-.02em}
+  .brand .sub{font-size:13px;color:var(--muted);font-weight:500}
+  .status{margin-top:10px;font-size:12.5px;color:var(--ink-soft);
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .dot{width:7px;height:7px;border-radius:50%;background:#cbd2df;flex:none}
+  .dot.ok{background:#2b8a6e}.dot.err{background:#e03131}
+  .reload{font-size:12px;color:var(--accent);background:none;border:none;
+    cursor:pointer;font-family:inherit;font-weight:600;padding:0;text-decoration:underline}
+  .upload{font-size:12px;color:var(--ink-soft);cursor:pointer;font-weight:600}
+  .upload input{display:none}
+  .databar{display:flex;justify-content:space-between;align-items:center;gap:14px;
+    flex-wrap:wrap;margin-top:12px}
+  .dbtns{display:flex;gap:8px}
+  .btn{font-family:inherit;font-size:13px;font-weight:700;border:none;border-radius:9px;
+    padding:9px 15px;cursor:pointer;background:var(--ink);color:#fff;transition:.15s;
+    display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{opacity:.88}
+  .btn.ghost{background:var(--accent-soft);color:var(--accent)}
+  .btn input{display:none}
+
+  .controls{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    box-shadow:var(--shadow);padding:6px;display:flex;gap:6px;margin-bottom:8px}
+  .tab{flex:1;padding:13px;border:none;background:none;border-radius:11px;cursor:pointer;
+    font-family:inherit;font-size:15px;font-weight:700;color:var(--ink-soft);transition:.15s}
+  .tab.active{background:var(--ink);color:#fff}
+  .tab:not(.active):hover{background:var(--line-soft)}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    box-shadow:var(--shadow);padding:22px;margin-bottom:18px}
+  .row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:7px}
+  .field label{font-size:12.5px;font-weight:700;color:var(--ink-soft)}
+  .field .hint{font-size:11.5px;color:var(--muted);font-weight:500}
+  input[type=number],input[type=text]{font-family:inherit;font-size:16px;font-weight:600;
+    color:var(--ink);border:1.5px solid var(--line);border-radius:10px;padding:11px 13px;
+    background:#fbfcfe;transition:.15s;width:100%}
+  input:focus{outline:none;border-color:var(--accent);background:#fff;
+    box-shadow:0 0 0 3px var(--accent-soft)}
+  .grade-in{width:120px;font-size:22px;font-weight:800;text-align:center}
+  .margin-in{width:78px;text-align:center}
+  .search-in{width:100%;font-size:17px}
+
+  .seg{display:inline-flex;background:var(--line-soft);border-radius:10px;padding:4px;gap:2px}
+  .seg button{border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:700;
+    color:var(--ink-soft);padding:8px 16px;border-radius:7px;cursor:pointer;transition:.15s}
+  .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(22,33,58,.12)}
+
+  .summary{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 4px}
+  .chip{font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:99px;display:flex;align-items:center;gap:6px}
+  .chip b{font-weight:800}
+  .chip.reach{background:var(--reach-bg);color:var(--reach)}
+  .chip.fit{background:var(--fit-bg);color:var(--fit)}
+  .chip.safe{background:var(--safe-bg);color:var(--safe)}
+  .chip.total{background:var(--ink);color:#fff}
+
+  .results{margin-top:14px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  thead th{text-align:left;font-size:11.5px;font-weight:700;color:var(--muted);
+    padding:0 12px 10px;border-bottom:1.5px solid var(--line);white-space:nowrap}
+  thead th.num{text-align:right}
+  tbody td{padding:13px 12px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+  tbody td.num{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  tbody tr:hover{background:#fafbfd}
+  .uni{font-weight:800;color:var(--ink)}
+  .dept{font-weight:600}
+  .typename{font-size:12px;color:var(--muted);font-weight:500}
+  td.cut-on{color:var(--ink);font-weight:800}
+  td.cut-off{color:var(--muted)}
+  .na{color:#c3cad6;font-weight:600}
+
+  .tag{font-size:11px;font-weight:800;padding:3px 8px;border-radius:6px;white-space:nowrap}
+  .tag.gyo{background:#eef1f6;color:#43506b}
+  .tag.jong{background:#f0ebf9;color:#7048a8}
+  .tag.humn{background:#eaeefb;color:#3b5bdb}
+  .tag.natu{background:#e6f3ee;color:#2b8a6e}
+  .tag.arts{background:#fbeaf2;color:#c2255c}
+  .tag.undf{background:#f1f3f7;color:#8a93a6}
+  .zone{font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:99px;white-space:nowrap}
+  .zone.reach{background:var(--reach-bg);color:var(--reach)}
+  .zone.fit{background:var(--fit-bg);color:var(--fit)}
+  .zone.safe{background:var(--safe-bg);color:var(--safe)}
+
+  .empty{text-align:center;padding:54px 20px;color:var(--muted)}
+  .empty .big{font-size:15px;font-weight:700;color:var(--ink-soft);margin-bottom:6px}
+  .empty .sm{font-size:13px}
+  .hl{color:var(--accent);font-weight:800}
+
+  @media(max-width:680px){
+    .wrap{padding:0 12px 60px}
+    thead{display:none}
+    table,tbody,tr,td{display:block;width:100%}
+    tbody tr{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+    tbody td{border:none;padding:3px 0;text-align:left}
+    tbody td.num{text-align:left}
+    tbody td[data-l]:before{content:attr(data-l);font-size:11px;color:var(--muted);
+      font-weight:700;display:inline-block;min-width:74px}
+    tbody tr:hover{background:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>수시 지원 가능 대학 예측기</h1>
+      <span class="sub">내신 환산등급 기준 · 교과 / 종합</span>
+    </div>
+    <div class="databar">
+      <div class="status" id="status">
+        <span class="dot" id="dot"></span>
+        <span id="statusText">데이터를 불러오는 중…</span>
+      </div>
+      <div class="dbtns">
+        <label class="btn" id="uploadBtn">엑셀 업로드
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.json">
+        </label>
+        <button class="btn ghost" id="jsonBtn" hidden>JSON으로 저장</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <button class="tab active" data-mode="predict">성적으로 찾기</button>
+    <button class="tab" data-mode="search">학교 · 학과 검색</button>
+  </div>
+
+  <!-- ===== 공통 필터 ===== -->
+  <div class="panel" id="filterPanel">
+    <div class="row" style="gap:28px">
+      <div class="field">
+        <label>전형</label>
+        <div class="seg" id="typeSeg">
+          <button data-t="all" class="on">전체</button>
+          <button data-t="교과">교과</button>
+          <button data-t="종합">종합</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>계열</label>
+        <div class="seg" id="trackSeg">
+          <button data-k="all" class="on">전체</button>
+          <button data-k="인문">인문</button>
+          <button data-k="자연">자연</button>
+          <button data-k="예체능">예체능</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>합격선 기준</label>
+        <div class="seg" id="cutSeg">
+          <button data-c="50">50%컷</button>
+          <button data-c="70" class="on">70%컷</button>
+          <button data-c="90">90% 안정선</button>
+        </div>
+        <span class="hint">90% 안정선은 50·70%컷으로 추정한 값입니다(공식 데이터 아님)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 모드1: 성적 입력 ===== -->
+  <div class="panel" id="predictPanel">
+    <div class="row" style="gap:26px">
+      <div class="field">
+        <label>내 내신 등급</label>
+        <input type="number" id="gradeIn" class="grade-in" step="0.01" min="1" max="9" placeholder="2.50">
+      </div>
+      <div class="field">
+        <label>상향 여유 (더 높은 대학까지)</label>
+        <input type="number" id="upIn" class="margin-in" step="0.1" min="0" value="0.2">
+      </div>
+      <div class="field">
+        <label>하향 여유 (안정 대학까지)</label>
+        <input type="number" id="downIn" class="margin-in" step="0.1" min="0" value="0.3">
+      </div>
+      <div class="field" style="flex:1;min-width:160px">
+        <span class="hint" id="windowHint">등급을 입력하면 범위에 맞는 학과를 보여줍니다.</span>
+      </div>
+    </div>
+    <div class="summary" id="summary" hidden></div>
+  </div>
+
+  <!-- ===== 모드2: 검색 ===== -->
+  <div class="panel" id="searchPanel" hidden>
+    <div class="field">
+      <label>대학명 또는 학과명 검색</label>
+      <input type="text" id="searchIn" class="search-in" placeholder="예: 숭실 · 전자 · 경영 · 컴퓨터">
+      <span class="hint">일부만 입력해도 됩니다. ‘전자’ → 전자공학전공 · IT융합전공 모두 검색</span>
+    </div>
+  </div>
+
+  <div class="results" id="results"></div>
+</div>
+
+<script>
+const JSON_URL = "data.json";      // ← GitHub에 이 파일이 있으면 우선 사용 (빠르고 git diff 추적 쉬움)
+const XLSX_URL = "대학어.xlsx";     // ← data.json이 없으면 엑셀에서 직접 읽음
+const RAW_KEYS = ["대학","전형구분","전형명","모집단위","모집인원","경쟁률","충원","등급50","등급70","계열"];
+let DATA = [];                     // 정제된 데이터(등급90·계열 포함)
+let mode = "predict";
+let typeFilter = "all";
+let trackFilter = "all";           // "all" | "인문" | "자연"
+let cut = "70";                    // "50" | "70" | "90"(추정 안정선)
+
+const $ = s => document.querySelector(s);
+const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+
+/* 90% 안정선 추정: 50·70%컷으로 등록자 성적분포(국소 정규)를 가정해
+   90분위를 외삽. 추정 불가/저신뢰는 null → 화면에서 '—'.
+   - 50%컷 ≥ 70%컷(분포정보 없음/역전) → null
+   - 모집인원 4명 미만(표본 부족) → null
+   K = Φ⁻¹(0.90)/Φ⁻¹(0.70) − 1 ≈ 1.4439 */
+const MIN_N = 4, K90 = 1.4439;
+function estimate90(g50, g70, mojip){
+  if(g50==null || g70==null || g70<=g50) return null;
+  if(mojip==null || mojip < MIN_N) return null;
+  return Math.min(g70 + K90*(g70-g50), 9.0);  // 9등급 상한
+}
+
+/* ---------- 계열 분류 (인문/자연/예체능/미정) ---------- */
+/* 우선순위: ①엑셀 계열열/JSON값 → ②이름의 (인문)/(자연)/(예체능)·계열표기 → ③보정목록 → ④키워드 자동분류
+   미분류·모호는 ""(전체에서만 표시). 1,245개 학과 기준 약 97% 자동 분류. */
+const TRACK_OVERRIDE = {
+  "금융・빅데이터학부":"인문","금융·빅데이터학부":"인문","정치외교학과":"인문","의료산업경영학과":"인문",
+  "패션산업학과":"인문","정보사회학과":"인문","공간디자인・소비자학과":"예체능","공간디자인·소비자학과":"예체능",
+  "의류학과":"인문","보험계리학과":"자연","호텔조리학과":"예체능","바이오식품외식산업학과":"자연",
+  "식품자원경제학과":"자연","도시사회학과":"인문","도시행정학과":"인문","보건경영학과":"인문","보건행정학과":"인문",
+  "보건정책관리학부":"인문","재활복지학과":"인문","재활상담학":"인문","재활상담학과":"인문","경호학과":"예체능",
+  "항공서비스학과":"인문","항공운항학과":"자연","부동산학과":"인문","ELLT학과":"인문","KFL학부":"인문","MSDE학과":"자연",
+  "성서학과":"인문","대순종학과":"인문","국가안보학과":"인문","사이버국방학과":"자연","Art & Design대학":"예체능",
+  "FineArts학부":"예체능","아트&테크놀로지학과":"예체능","아트앤테크놀로지학과":"예체능","영상학과":"예체능",
+  "의류산업학과":"예체능","의류산업학전공":"예체능","의상학과":"예체능","문예창작학":"인문","문예창작학과":"인문",
+  "문예콘텐츠창작학과":"인문","Global Business & Technology학부":"인문","Language & Diplomacy학부":"인문",
+  "Language & Trade학부":"인문","공공인재빅데이터융합학":"인문","미디어소프트웨어학과":"자연",
+  "사이버드론봇군사학과":"자연","앙트러프러너리얼리더십학부 앙트러프러너십전공":"인문","앙트러프러너십전공":"인문",
+  "테슬(TESL)전공":"인문",
+};
+const YE_KW = ["미술","회화","조소","조각","동양화","서양화","한국화","공예","도예","도자","조형","디자인","일러스트",
+  "만화","애니","음악","관현악","국악","성악","작곡","피아노","기악","실용음악","연극","연기","뮤지컬","무용","발레",
+  "영화","영상","공연","연출","무대","체육","스포츠","태권도","유도","검도","무도","골프","경호","레저","헬스","피트니스",
+  "뷰티","메이크업","헤어","미용","모델","예술","예능","의상","운동","아트","Art","Design","Fine"];
+const NAT_KW = ["컴퓨터","전자","전기","기계","화공","물리","생명","생물","수학","통계","소프트","인공지능",
+  "정보보호","반도체","디스플레이","신소재","건축","건설","토목","도시","조경","식품","바이오","나노","배터리","클라우드",
+  "스마트","보안","의예","치의","치위생","약학","한의","간호","방사선","응급","재활","의공","의생명","자동차","게임",
+  "빅데이터","환경","에너지","수의","원예","축산","해양","천문","우주","데이터","보건","의료기기","제약","조리","AI","로봇",
+  "ICT","IT","정보시스템","정보융합","가상현실","양자","대기과학","지구과학","지구시스템","수리과학","산림","식량","식물",
+  "동물","안경광학","임상병리","의약","의학","화장품","모빌리티","드론","컴퓨팅","네트워크","지능정보","분자","약과학",
+  "과학기술","과학교육","이공","자연과학","제품공간","발명","수산"];
+const HUM_KW = ["국어","국문","영문","영어","독어","불어","중어","일어","일본","프랑스","독일","노어","서어","언어","어문",
+  "한문","사학","역사","철학","법","행정","정책","경영","경제","통상","무역","금융","회계","세무","정치","외교","사회복지",
+  "복지","미디어","언론","커뮤니","광고","홍보","심리","유아","아동","문헌","신학","기독교","종교","목회","관광","투어리즘",
+  "호텔","외식","패션","문화","인문","벤처","상담","사회학","국제","소비자","특수교육","평생교육","어과","지역학","중국학",
+  "일본학","한국학","아시아학","동양학","유학","네덜란드","베트남","몽골","아랍","스페인","이탈리아","포르투갈","폴란드",
+  "헝가리","루마니아","태국","인도","페르시아","우크라이나","그리스","불가리아","스칸디나비아","중앙아시아","아프리카",
+  "러시아","유라시아","체코","슬로바키아","세르비아","크로아티아","튀르키예","아제르바이잔","말레이","인도네시아","신문방송",
+  "경찰","공공","인류","미학","청소년지도","휴먼서비스","사회과학","상경","글로벌리더","글로벌인재","불교","승가","수어",
+  "한문교육","사회교육","윤리교육","지리교육","지리","초등교육","가정교육","역사교육","교육학","물류","문예","창작","안보",
+  "성서","Language","Business"];
+const ZA_KW = ["자유전공","자율전공","융합학부","융합대학","융합계열","융합전공","융합학과","미래융합","첨단융합","글로벌융합",
+  "사회융합","계열광역","학부대학","인터칼리지","광역","상상력인재","융합인재","프런티어","첨단학부","스크랜튼","언더우드","융합과학"];
+
+function classifyTrack(name){
+  if(!name) return "";
+  if(TRACK_OVERRIDE[name]) return TRACK_OVERRIDE[name];
+  const nn = name.replace(/\s/g,"");
+  if(nn.includes("예체능")||name.includes("(예능)")) return "예체능";
+  if(nn.includes("이공계열")||nn.includes("자연계열")||name.includes("(자연)")) return "자연";
+  if(nn.includes("인문사회")||nn.includes("인문계열")||name.includes("(인문)")||nn.includes("인문대학")||nn.includes("인문학부")||nn.includes("문과대학")) return "인문";
+  if((nn.includes("공학")||nn.includes("공과")) && !nn.includes("전공학")) return "자연";   // 공학 강제('전공학부' 오인 방지)
+  if(nn.includes("경영")) return "인문";                        // 경영 주축
+  const ye  = YE_KW.some(k=>nn.includes(k));
+  const nat = NAT_KW.some(k=>nn.includes(k)) || (nn.includes("화학") && !nn.includes("문화"));
+  const hum = HUM_KW.some(k=>nn.includes(k));
+  const za  = ZA_KW.some(k=>nn.includes(k));
+  if(ye && !(nat && !hum)) return "예체능";
+  if(nat && !hum) return "자연";
+  if(hum && !nat) return "인문";
+  if(za) return "미정";
+  return "자연";   // 그 외(모호·미분류)는 기본적으로 이과(자연)로 배정
+}
+
+/* ---------- 엑셀 파싱 (구형·신형 레이아웃 자동 인식) ----------
+   '수시'가 가장 많이 등장하는 열(gi)을 찾고, 그 열 기준 상대 위치로 데이터를 읽음.
+   gi+1 모집단위 · gi+2 모집인원 · gi+3 경쟁률 · gi+4 충원 · gi+7 등급50 · gi+8 등급70 · gi+9 계열(선택) */
+function parseWorkbook(wb){
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  const cnt={};
+  for(const r of rows) for(let i=0;i<r.length;i++) if(String(r[i]).trim()==="수시") cnt[i]=(cnt[i]||0)+1;
+  let gi=3, best=-1; for(const k in cnt){ if(cnt[k]>best){ best=cnt[k]; gi=+k; } }
+
+  let uni=null, gubun=null, lastLabel="";
+  const out=[];
+  for(const r of rows){
+    if(r[0]!=null && String(r[0]).trim()!=="") uni = String(r[0]).trim();
+    const b = r[1]!=null ? String(r[1]).trim() : "";
+    if(b==="종합" || b==="교과") gubun = b;
+    const gv = (gi<r.length && r[gi]!=null) ? String(r[gi]).trim() : "";
+    if(gv && gv!=="수시" && gv!=="구분") lastLabel = gv;     // 전형명 라벨 행
+    if(gv !== "수시") continue;                              // 실제 데이터 행만
+    const leftv = (gi>0 && r[gi-1]!=null) ? String(r[gi-1]).trim() : "";
+    const formName = (leftv.includes("학생부")||leftv.includes("전형")) ? leftv : lastLabel;
+    const tcol = (gi+9<r.length && r[gi+9]!=null) ? String(r[gi+9]).trim() : "";
+    out.push({
+      대학: uni, 전형구분: gubun, 전형명: formName,
+      모집단위: r[gi+1]!=null ? String(r[gi+1]).trim() : "",
+      모집인원: r[gi+2], 경쟁률: r[gi+3], 충원: r[gi+4],
+      등급50: num(r[gi+7]), 등급70: num(r[gi+8]),
+      계열: (tcol==="인문"||tcol==="자연") ? tcol : undefined,
+    });
+  }
+  return out;
+}
+
+/* 등급90(추정 안정선)·계열을 매 로드 시 계산. 계열은 명시값 우선, 없으면 자동분류 */
+function withEst(rows){
+  return rows.map(d => {
+    const track = (d.계열==="인문"||d.계열==="자연") ? d.계열 : classifyTrack(d.모집단위);
+    return {...d, 계열: track,
+      등급90: estimate90(num(d.등급50), num(d.등급70), num(d.모집인원))};
+  });
+}
+
+/* ---------- 데이터 로드 (data.json → 대학어.xlsx → 업로드 순) ---------- */
+async function loadData(){
+  setStatus("loading","데이터를 불러오는 중…");
+  // 1) data.json 우선
+  try{
+    const res = await fetch(JSON_URL,{cache:"no-store"});
+    if(res.ok){
+      const raw = await res.json();
+      if(Array.isArray(raw) && raw.length){ DATA = withEst(raw); return onLoaded(JSON_URL); }
+    }
+  }catch(e){}
+  // 2) 엑셀 폴백
+  try{
+    const res = await fetch(XLSX_URL,{cache:"no-store"});
+    if(!res.ok) throw 0;
+    const buf = await res.arrayBuffer();
+    DATA = withEst(parseWorkbook(XLSX.read(buf,{type:"array"})));
+    return onLoaded(XLSX_URL);
+  }catch(e){}
+  // 3) 업로드 유도
+  setStatus("err","불러올 데이터가 없습니다. ‘엑셀 업로드’ 버튼으로 파일을 선택하세요.");
+}
+
+function loadFromFile(file){
+  const fr = new FileReader();
+  if(file.name.toLowerCase().endsWith(".json")){
+    fr.onload = e => { try{ DATA = withEst(JSON.parse(e.target.result)); onLoaded(file.name); }
+      catch(err){ setStatus("err","JSON 형식을 읽을 수 없습니다."); } };
+    fr.readAsText(file);
+  }else{
+    fr.onload = e => { DATA = withEst(parseWorkbook(XLSX.read(e.target.result,{type:"array"}))); onLoaded(file.name); };
+    fr.readAsArrayBuffer(file);
+  }
+}
+
+/* 현재 데이터를 data.json 으로 내려받기 (등급90은 제외, 원본 필드만) */
+function exportJson(){
+  const raw = DATA.map(d => { const o={}; RAW_KEYS.forEach(k=>o[k]=d[k]); return o; });
+  const blob = new Blob([JSON.stringify(raw,null,1)],{type:"application/json;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "data.json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+function onLoaded(srcName){
+  const unis = new Set(DATA.map(d=>d.대학)).size;
+  setStatus("ok",`${srcName} · 대학 ${unis}곳 · 학과 ${DATA.length.toLocaleString()}개`);
+  $("#jsonBtn").hidden = false;
+  render();
+}
+function setStatus(kind,text){
+  $("#dot").className="dot"+(kind==="ok"?" ok":kind==="err"?" err":"");
+  $("#statusText").textContent=text;
+}
+
+/* ---------- 필터 도우미 ---------- */
+const cutVal = d => cut==="50" ? d.등급50 : cut==="70" ? d.등급70 : d.등급90;
+const byType = d => typeFilter==="all" || d.전형구분===typeFilter;
+const byTrack = d => trackFilter==="all" || d.계열===trackFilter || d.계열==="미정";
+const inFilter = d => byType(d) && byTrack(d);
+
+/* ---------- 렌더 ---------- */
+function render(){ mode==="predict" ? renderPredict() : renderSearch(); }
+
+function renderPredict(){
+  $("#summary").hidden=true;
+  const g=num($("#gradeIn").value);
+  if(g==null){
+    $("#windowHint").textContent="등급을 입력하면 범위에 맞는 학과를 보여줍니다.";
+    return emptyState("내신 등급을 입력해 주세요","위에 내 내신 등급을 적으면 지원 가능한 학과가 표시됩니다.");
+  }
+  const up=num($("#upIn").value)??0, down=num($("#downIn").value)??0;
+  const lo=g-up, hi=g+down;
+  const cutLabel = cut==="90" ? "90% 안정선(추정)" : cut+"%컷";
+  $("#windowHint").innerHTML=`<b style="color:var(--ink)">${lo.toFixed(2)} ~ ${hi.toFixed(2)}</b> 범위의 ${cutLabel} 학과를 표시합니다.`;
+
+  let list=DATA.filter(d=>inFilter(d)).map(d=>({d,v:cutVal(d)}))
+    .filter(x=>x.v!=null && x.v>=lo && x.v<=hi)
+    .sort((a,b)=>a.v-b.v);
+
+  let nR=0,nF=0,nS=0;
+  list.forEach(x=>{const diff=x.v-g; x.zone=diff<-0.1?"reach":diff>0.1?"safe":"fit";
+    x.zone==="reach"?nR++:x.zone==="safe"?nS++:nF++;});
+
+  const s=$("#summary"); s.hidden=false;
+  s.innerHTML=`<span class="chip total">전체 <b>${list.length}</b></span>
+    <span class="chip reach">상향 <b>${nR}</b></span>
+    <span class="chip fit">적정 <b>${nF}</b></span>
+    <span class="chip safe">안정 <b>${nS}</b></span>`;
+
+  if(!list.length) return emptyState("범위 안에 학과가 없습니다","‘상향·하향 여유’를 넓히거나 전형 필터를 바꿔보세요.");
+  drawTable(list, true);
+}
+
+function renderSearch(){
+  const q=$("#searchIn").value.trim();
+  if(!q) return emptyState("대학명 또는 학과명을 입력하세요","‘전자’처럼 일부만 입력해도 관련 학과가 모두 검색됩니다.");
+  const qq=q.toLowerCase();
+  const list=DATA.filter(d=>inFilter(d) &&
+      ((d.대학||"").toLowerCase().includes(qq) || (d.모집단위||"").toLowerCase().includes(qq)))
+    .map(d=>({d,v:cutVal(d)}))
+    .sort((a,b)=>(a.v??99)-(b.v??99));
+  if(!list.length) return emptyState(`‘${q}’ 검색 결과가 없습니다`,"다른 키워드로 시도하거나 전형 필터를 확인하세요.");
+  $("#results").dataset.count=list.length;
+  drawTable(list, false, q);
+}
+
+function fmt(v,d=2){return v==null||v===""? '<span class="na">—</span>' : (typeof v==="number"&&!Number.isInteger(v)? v.toFixed(d) : v);}
+function cutCell(val,isOn,label){return `<td class="num ${isOn?'cut-on':'cut-off'}" data-l="${isOn?'▸ ':''}${label}">${fmt(val)}</td>`;}
+
+function drawTable(list, showZone, q){
+  const head=`<thead><tr>
+    <th>대학</th><th>전형</th><th>전형명 · 모집단위</th>
+    <th class="num">모집</th><th class="num">경쟁률</th><th class="num">충원</th>
+    <th class="num">50%컷</th><th class="num">70%컷</th>
+    <th class="num" title="50·70%컷으로 추정한 90분위 안정 지원선. 공식 데이터가 아니며, 추정 불가/표본부족 학과는 — 로 표시됩니다.">추정 안정선<br>90%</th>
+    ${showZone?'<th>구분</th>':''}</tr></thead>`;
+  const body=list.map(({d,zone})=>{
+    const tag=d.전형구분==="교과"?'<span class="tag gyo">교과</span>':'<span class="tag jong">종합</span>';
+    const trk=d.계열==="인문"?'<span class="tag humn">인문</span>':d.계열==="자연"?'<span class="tag natu">자연</span>':d.계열==="예체능"?'<span class="tag arts">예체능</span>':d.계열==="미정"?'<span class="tag undf">자율</span>':'';
+    const zoneCell=showZone?`<td data-l="구분"><span class="zone ${zone}">${zone==="reach"?"상향":zone==="safe"?"안정":"적정"}</span></td>`:'';
+    return `<tr>
+      <td class="uni" data-l="대학">${d.대학}</td>
+      <td data-l="전형"><span style="display:inline-flex;gap:4px;flex-wrap:wrap">${tag}${trk}</span></td>
+      <td data-l="학과"><span class="dept">${d.모집단위}</span><br><span class="typename">${d.전형명||""}</span></td>
+      <td class="num" data-l="모집">${fmt(d.모집인원)}</td>
+      <td class="num" data-l="경쟁률">${fmt(d.경쟁률)}</td>
+      <td class="num" data-l="충원">${fmt(d.충원)}</td>
+      ${cutCell(d.등급50, cut==="50", "50%컷")}
+      ${cutCell(d.등급70, cut==="70", "70%컷")}
+      ${cutCell(d.등급90, cut==="90", "90%안정선")}
+      ${zoneCell}</tr>`;
+  }).join("");
+  $("#results").innerHTML=`<div class="panel" style="padding:18px 22px"><table>${head}<tbody>${body}</tbody></table></div>`;
+}
+
+function emptyState(big,sm){
+  $("#results").innerHTML=`<div class="panel"><div class="empty"><div class="big">${big}</div><div class="sm">${sm}</div></div></div>`;
+}
+
+/* ---------- 이벤트 ---------- */
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); mode=b.dataset.mode;
+  $("#predictPanel").hidden = mode!=="predict";
+  $("#searchPanel").hidden  = mode!=="search";
+  render();
+});
+$("#typeSeg").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+  $("#typeSeg").querySelectorAll("button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); typeFilter=b.dataset.t; render();};
+$("#trackSeg").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+  $("#trackSeg").querySelectorAll("button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); trackFilter=b.dataset.k; render();};
+$("#cutSeg").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+  $("#cutSeg").querySelectorAll("button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); cut=b.dataset.c; render();};
+["#gradeIn","#upIn","#downIn"].forEach(s=>$(s).addEventListener("input",()=>{if(mode==="predict")renderPredict();}));
+$("#searchIn").addEventListener("input",()=>{if(mode==="search")renderSearch();});
+$("#fileInput").onchange=e=>{ if(e.target.files[0]) loadFromFile(e.target.files[0]); e.target.value=""; };
+$("#jsonBtn").onclick=exportJson;
+
+loadData();
+</script>
+</body>
+</html>
